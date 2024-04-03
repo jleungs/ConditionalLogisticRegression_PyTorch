@@ -70,6 +70,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
             # shuffle data based on groups
             random.shuffle(self.strata_list)
             # train on mini-batch
+            batch_loss = []
             for batch in range(0, len(self.strata_list), self.groups_batch_size):
                 # select based on batch
                 strata_batch = self.strata_list[batch:batch+self.groups_batch_size]
@@ -89,8 +90,11 @@ class ConditionalLogisticRegression(torch.nn.Module):
                 sgd.zero_grad(set_to_none=True)
                 loss.backward()
                 sgd.step()
+                # for the mean loss
+                batch_loss.append(loss.item())
             # for logging, save loss for all epochs
-            loss_list.append(loss.item())
+            batch_loss = sum(batch_loss)/len(batch_loss)
+            loss_list.append(batch_loss)
             if epoch % 10 == 0 and self.verbose:
                 print(f"{epoch} : {sum(loss_list)/len(loss_list):.2f}")
 
