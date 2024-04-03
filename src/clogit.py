@@ -86,7 +86,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
                 # negative log likelihood of predicted
                 loss = self.neg_log_likelihood(y_pred, y_batch)
                 # compute gradients and optimize
-                sgd.zero_grad()
+                sgd.zero_grad(set_to_none=True)
                 loss.backward()
                 sgd.step()
             # for logging, save loss for all epochs
