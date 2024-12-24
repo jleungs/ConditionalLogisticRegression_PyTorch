@@ -27,7 +27,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
     """
     Conditional / Fixed-Effects Logistic Regression model implemented with PyTorch.
     """
-    def __init__(self, lr=0.00001, epochs=100, groups_batch_size=1, l2_constant=0.0001, verbose=True, early_stop_patience=3, early_stop_delta=0.5):
+    def __init__(self, lr=0.00001, epochs=100, groups_batch_size=1, l2_constant=0.0001, verbose=True, earlystop_patience=3, earlystop_delta=0.5):
         """ Initializing all neccessary variables """
         super(ConditionalLogisticRegression, self).__init__()
         # try to use GPU
@@ -38,8 +38,8 @@ class ConditionalLogisticRegression(torch.nn.Module):
         self.groups_batch_size = int(groups_batch_size)
         self.l2_constant = l2_constant
         self.verbose = verbose
-        self.early_stop_patience = early_stop_patience
-        self.early_stop_delta= early_stop_delta
+        self.earlystop_patience = earlystop_patience
+        self.earlystop_delta= earlystop_delta
 
 
     def forward(self, X, strata):
@@ -87,7 +87,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
         sgd = torch.optim.SGD(self.parameters(), lr=self.lr, weight_decay=self.l2_constant)
         loss_list = []
         # early stopper class load
-        early_stopper = EarlyStopper(patience=self.early_stop_patience, min_delta=self.early_stop_delta)
+        early_stopper = EarlyStopper(patience=self.earlystop_patience, min_delta=self.earlystop_delta)
         # mini-batch gradient descent loop
         for epoch in range(self.epochs+1):
             # shuffle data based on groups
