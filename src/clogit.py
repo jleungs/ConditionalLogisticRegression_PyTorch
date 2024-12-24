@@ -86,6 +86,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
         # setup the optimizer 
         sgd = torch.optim.SGD(self.parameters(), lr=self.lr, weight_decay=self.l2_constant)
         loss_list = []
+        validation_loss_list = []
         # early stopper class load
         early_stopper = EarlyStopper(patience=self.earlystop_patience, min_delta=self.earlystop_delta)
         # mini-batch gradient descent loop
@@ -130,10 +131,13 @@ class ConditionalLogisticRegression(torch.nn.Module):
                 y_test = self.y[flat_test_strata_list]
                 test_strata_batch_len = [len(index) for index in test_strata_list]
                 y_test_pred = self.forward(X_test, test_strata_batch_len)#.to(self.device)
-                validation_loss = self.neg_log_likelihood(y_test_pred, y_test)
-            if early_stopper.early_stop(validation_loss):             
-                print(f"Early stop epoch: {epoch}\nValidation loss: {validation_loss:.2f}\nTrain loss: {sum(loss_list)/len(loss_list):.2f}")
+                validation_loss = self.neg_log_likelihood(y_test_pred, y_test).item()
+                validation_loss_list.append(validation_loss)
+            if early_stopper.early_stop(validation_loss):
+                print(f"Early stop epoch: {epoch}\nValidation loss: {sum(validation_loss_list)/len(validation_loss_list):.2f}"
+                      f"\nTrain loss: {sum(loss_list)/len(loss_list):.2f}")
                 break
+        print(f"Train loss list: {loss_list}\nValidation loss list: {validation_loss_list}")
 
 
     def predict(self, X, strata=None, strata_list=None):
