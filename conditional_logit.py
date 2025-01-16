@@ -42,18 +42,20 @@ class ConditionalLogisticRegression(torch.nn.Module):
         self.linear = torch.nn.Linear(input_size, self.output_size, bias=True, device=self.device)
 
 
-    def forward(self, X, strata):
+    def forward(self, X, strata, train=True):
         """ Function to compute the probability, overwritten from torch.nn.Module """
-        y_hat = self.linear(X).squeeze()
-        # create matrix filled with -300 to get 0 when taking softmax (e^(-300) ≈ 0)
-        y_hat_matrix = torch.full((len(strata), max(strata)), -300, dtype=torch.float32, device=self.device)
-        ix = 0
-        for i, s in enumerate(strata):
-            y_hat_matrix[i,0:s] = y_hat[ix:ix+s]
-            ix += s
-        y_hat_matrix = torch.nn.functional.softmax(y_hat_matrix, dim=1)
+        y_hat = self.linear(X)
 
-        return y_hat_matrix[y_hat_matrix != 0]
+        if train:
+            ix = 0
+            for i, s in enumerate(strata):
+                y_hat[ix:ix+s] = torch.nn.functional.softmax(y_hat[ix:ix+s], dim=0)
+                ix += s
+        else:
+            for value, index in strata:
+                y_hat[index] = torch.nn.functional.softmax(y_hat[index], dim=0)
+
+        return y_hat
 
 
     def neg_log_likelihood(self, y_pred, y_true):
@@ -110,11 +112,8 @@ class ConditionalLogisticRegression(torch.nn.Module):
 
         with torch.no_grad():
             X = torch.tensor(X, dtype=torch.float32).to(self.device)
-            strata_list = list(strata.groupby(strata.squeeze()).groups.values())
-            #strata = strata.groupby(strata.squeeze()).groups.items()
-            flat_strata = [index for indices in strata_list for index in indices]
-            strata_len = [len(index) for index in strata_list]
+            strata = strata.groupby(strata.squeeze()).groups.items()
 
-            return self.forward(X, strata_len)
+            return self.forward(X, strata, train=False)
 
 
