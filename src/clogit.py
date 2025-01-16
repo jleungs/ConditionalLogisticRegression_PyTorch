@@ -82,7 +82,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
                 y_batch = self.y[flat_strata_batch]
 
                 # get probabilities
-                y_pred = self.forward(X_batch, strata_batch_len).to(self.device)
+                y_pred = self.forward(X_batch, strata_batch_len)#.to(self.device)
                 # negative log likelihood of predicted
                 loss = self.neg_log_likelihood(y_pred, y_batch)
                 # compute gradients and optimize
