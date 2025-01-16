@@ -122,8 +122,10 @@ class ConditionalLogisticRegression(torch.nn.Module):
             strata_list = list(strata.groupby(strata.squeeze()).groups.values())
             flat_strata = [index for indices in strata_list for index in indices]
             strata_len = [len(index) for index in strata_list]
+
+            original_index = torch.argsort(torch.tensor(flat_strata, device=self.device))
             X = X[flat_strata]
 
-            return self.forward(X, strata_len)[flat_strata].float().squeeze().cpu().numpy()
+            return self.forward(X, strata_len)[original_index].float().squeeze().cpu().numpy()
 
 
