@@ -105,10 +105,23 @@ class ConditionalLogisticRegression(torch.nn.Module):
     def predict(self, X, strata):
         """ Make predictions after fit and return binary """
         with torch.no_grad():
-            return (self.predict_prob(X, strata) > 0.5).astype(int)
+            if not isinstance(strata, pd.DataFrame):
+                strata = pd.DataFrame(strata)
+            strata.reset_index(drop=True, inplace=True)
+
+            strata_list = list(strata.groupby(strata.squeeze()).groups.values())
+
+            probabilities = self.predict_prob(X, strata, strata_list)
+            for i in strata_list:
+                max_prob_ix = probabilities[i].argmax()
+                strata_ix = i[max_prob_ix]
+                probabilities[i] = 0
+                probabilities[strata_ix] = 1
+
+            return probabilities.astype(int)
 
 
-    def predict_prob(self, X, strata):
+    def predict_prob(self, X, strata, strata_list=None):
         """ Make predictions after fit and return probabilities """
         if isinstance(X, pd.DataFrame):
             X = X.values
@@ -119,7 +132,8 @@ class ConditionalLogisticRegression(torch.nn.Module):
         with torch.no_grad():
             X = torch.tensor(X, dtype=torch.float32).to(self.device)
             #strata = strata.groupby(strata.squeeze()).groups.items()
-            strata_list = list(strata.groupby(strata.squeeze()).groups.values())
+            if not strata_list:
+                strata_list = list(strata.groupby(strata.squeeze()).groups.values())
             flat_strata = [index for indices in strata_list for index in indices]
             strata_len = [len(index) for index in strata_list]
 
