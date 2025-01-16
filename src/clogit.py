@@ -1,6 +1,7 @@
 import torch
 import random
 import pandas as pd
+import numpy as np
 
 
 class ConditionalLogisticRegression(torch.nn.Module):
@@ -93,14 +94,15 @@ class ConditionalLogisticRegression(torch.nn.Module):
                 print(f"{epoch} : {sum(loss_list)/len(loss_list):.2f}")
 
 
-    def predict(self, X, strata):
+    def predict(self, X, strata=None, strata_list=None):
         """ Make predictions after fit and return binary """
         with torch.no_grad():
-            if not isinstance(strata, pd.DataFrame):
-                strata = pd.DataFrame(strata)
-            strata.reset_index(drop=True, inplace=True)
+            if not strata_list:
+                if not isinstance(strata, pd.DataFrame):
+                    strata = pd.DataFrame(strata)
+                strata.reset_index(drop=True, inplace=True)
 
-            strata_list = list(strata.groupby(strata.squeeze()).groups.values())
+                strata_list = list(strata.groupby(strata.squeeze()).groups.values())
 
             probabilities = self.predict_prob(X, strata, strata_list)
             for i in strata_list:
@@ -119,9 +121,10 @@ class ConditionalLogisticRegression(torch.nn.Module):
         if not isinstance(strata, pd.DataFrame):
             strata = pd.DataFrame(strata)
         strata.reset_index(drop=True, inplace=True)
+        if not torch.is_tensor(X):
+            X = torch.tensor(X, dtype=torch.float32).to(self.device)
 
         with torch.no_grad():
-            X = torch.tensor(X, dtype=torch.float32).to(self.device)
             #strata = strata.groupby(strata.squeeze()).groups.items()
             if not strata_list:
                 strata_list = list(strata.groupby(strata.squeeze()).groups.values())
@@ -137,4 +140,8 @@ class ConditionalLogisticRegression(torch.nn.Module):
     def get_coef(self):
         return [param.data.tolist() for param in self.parameters() if len(param.size()) > 1][0][0]
 
+
+    def score(self):
+        y_pred = self.predict(self.X, strata_list=self.strata_list)
+        return np.mean(y_pred == self.y.float().squeeze().cpu().numpy())
 
