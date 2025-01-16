@@ -24,8 +24,8 @@ class ConditionalLogisticRegression(torch.nn.Module):
             print(f"strata has to be one-dimensional, got {strata.shape[1]}")
             exit()
 
-        self.X = torch.tensor(X, dtype=torch.float32).to(self.device)
-        self.y = torch.tensor(y, dtype=torch.float32).to(self.device)
+        self.X = torch.tensor(X, dtype=torch.float32, device=self.device)
+        self.y = torch.tensor(y, dtype=torch.float32, device=self.device)
         self.strata_list = list(strata.groupby(strata.squeeze()).groups.values())
 
         if len(self.y.shape) > 1 and self.y.shape[1] != 1:
@@ -39,13 +39,13 @@ class ConditionalLogisticRegression(torch.nn.Module):
         input_size = self.X.shape[1]
         self.output_size = 1
 
-        self.linear = torch.nn.Linear(input_size, self.output_size, bias=True).to(self.device)
+        self.linear = torch.nn.Linear(input_size, self.output_size, bias=True, device=self.device)
 
 
     def forward(self, X, strata, train=True):
         """ Function to compute the probability, overwritten from torch.nn.Module """
         y_hat = torch.exp(self.linear(X)).to(self.device)
-        y_hat_sum = torch.empty(X.shape[0], self.output_size, dtype=torch.float32).to(self.device)
+        y_hat_sum = torch.empty(X.shape[0], self.output_size, dtype=torch.float32, device=self.device)
 
         if train:
             ix = 0
