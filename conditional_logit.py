@@ -6,7 +6,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
     """
     Conditional / Fixed-Effects Logistic Regression model implemented with PyTorch.
     """
-    def __init__(self, X, y, strata, learning_rate=0.0001, max_iter=100, groups_batch_size=5):
+    def __init__(self, X, y, strata, learning_rate=0.0001, max_iter=1000, groups_batch_size=5):
         """ Initializing all neccessary variables """
         super(ConditionalLogisticRegression, self).__init__()
         # try to use GPU
@@ -25,7 +25,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
             exit()
 
         self.X = torch.tensor(X, dtype=torch.float32, device=self.device)
-        self.y = torch.tensor(y, dtype=torch.float32, device=self.device)
+        self.y = torch.tensor(y, dtype=torch.float32, device=self.device).squeeze()
         self.strata_list = list(strata.groupby(strata.squeeze()).groups.values())
 
         if len(self.y.shape) > 1 and self.y.shape[1] != 1:
@@ -42,29 +42,24 @@ class ConditionalLogisticRegression(torch.nn.Module):
         self.linear = torch.nn.Linear(input_size, self.output_size, bias=True, device=self.device)
 
 
-    def forward(self, X, strata, train=True):
+    def forward(self, X, strata):
         """ Function to compute the probability, overwritten from torch.nn.Module """
-        y_hat = torch.exp(self.linear(X)).to(self.device)
-        y_hat_sum = torch.empty(X.shape[0], self.output_size, dtype=torch.float32, device=self.device)
+        y_hat = self.linear(X).squeeze()
+        # create matrix filled with -300 to get 0 when taking softmax (e^(-300) ≈ 0)
+        y_hat_matrix = torch.full((len(strata), max(strata)), -300, dtype=torch.float32, device=self.device)
+        ix = 0
+        for i, s in enumerate(strata):
+            y_hat_matrix[i,0:s] = y_hat[ix:ix+s]
+            ix += s
+        y_hat_matrix = torch.nn.functional.softmax(y_hat_matrix, dim=1)
 
-        if train:
-            ix = 0
-            for sl in strata:
-                y_hat_sum[ix:ix+sl] = torch.sum(y_hat[ix:ix+sl])
-                ix += sl
-
-            #self.y_hat = y_hat
-            #self.y_hat_sum = y_hat_sum
-        else:
-            for value, index in strata:
-                y_hat_sum[index] = torch.sum(y_hat[index])
-
-        return y_hat / y_hat_sum
+        return y_hat_matrix[y_hat_matrix != 0]
 
 
     def neg_log_likelihood(self, y_pred, y_true):
         """ The negative log-likelihood function to optimize """
-        return -(torch.sum(y_true * torch.log(y_pred)).to(self.device))
+        # divide by number of samples N, for mini-batch gradient descent
+        return -(torch.sum(y_true * torch.log(y_pred))) / self.groups_batch_size
 
 
     def fit(self):
@@ -115,8 +110,11 @@ class ConditionalLogisticRegression(torch.nn.Module):
 
         with torch.no_grad():
             X = torch.tensor(X, dtype=torch.float32).to(self.device)
-            strata = strata.groupby(strata.squeeze()).groups.items()
+            strata_list = list(strata.groupby(strata.squeeze()).groups.values())
+            #strata = strata.groupby(strata.squeeze()).groups.items()
+            flat_strata = [index for indices in strata_list for index in indices]
+            strata_len = [len(index) for index in strata_list]
 
-            return self.forward(X, strata, train=False)
+            return self.forward(X, strata_len)
 
 
