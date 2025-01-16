@@ -4,11 +4,30 @@ import pandas as pd
 import numpy as np
 
 
+class EarlyStopper:
+    # https://stackoverflow.com/questions/71998978/early-stopping-in-pytorch
+    def __init__(self, patience=1, min_delta=0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.min_validation_loss = float('inf')
+
+    def early_stop(self, validation_loss):
+        if validation_loss < self.min_validation_loss:
+            self.min_validation_loss = validation_loss
+            self.counter = 0
+        elif validation_loss > (self.min_validation_loss + self.min_delta):
+            self.counter += 1
+            if self.counter >= self.patience:
+                return True
+        return False
+
+
 class ConditionalLogisticRegression(torch.nn.Module):
     """
     Conditional / Fixed-Effects Logistic Regression model implemented with PyTorch.
     """
-    def __init__(self, lr=0.00001, epochs=100, groups_batch_size=1, l2_constant=0.0001, verbose=True):
+    def __init__(self, lr=0.00001, epochs=100, groups_batch_size=1, l2_constant=0.0001, verbose=True, early_stop_patience=3, early_stop_delta=0.5):
         """ Initializing all neccessary variables """
         super(ConditionalLogisticRegression, self).__init__()
         # try to use GPU
@@ -19,6 +38,8 @@ class ConditionalLogisticRegression(torch.nn.Module):
         self.groups_batch_size = int(groups_batch_size)
         self.l2_constant = l2_constant
         self.verbose = verbose
+        self.early_stop_patience = early_stop_patience
+        self.early_stop_delta= early_stop_delta
 
 
     def forward(self, X, strata):
@@ -65,15 +86,20 @@ class ConditionalLogisticRegression(torch.nn.Module):
         # setup the optimizer 
         sgd = torch.optim.SGD(self.parameters(), lr=self.lr, weight_decay=self.l2_constant)
         loss_list = []
+        # early stopper class load
+        early_stopper = EarlyStopper(patience=self.early_stop_patience, min_delta=self.early_stop_delta)
         # mini-batch gradient descent loop
         for epoch in range(self.epochs+1):
             # shuffle data based on groups
             random.shuffle(self.strata_list)
+            train_strata_list_idx = round(len(self.strata_list) * 0.8)
+            train_strata_list = self.strata_list[:train_strata_list_idx]
+            test_strata_list = self.strata_list[train_strata_list_idx:]
             # train on mini-batch
             batch_loss = []
-            for batch in range(0, len(self.strata_list), self.groups_batch_size):
+            for batch in range(0, len(train_strata_list), self.groups_batch_size):
                 # select based on batch
-                strata_batch = self.strata_list[batch:batch+self.groups_batch_size]
+                strata_batch = train_strata_list[batch:batch+self.groups_batch_size]
                 # need to flat the list of lists to be able to get the indices
                 flat_strata_batch = [index for indices in strata_batch for index in indices]
                 # get the length of each group/strata to sum in forward()
@@ -97,6 +123,17 @@ class ConditionalLogisticRegression(torch.nn.Module):
             loss_list.append(batch_loss)
             if epoch % 10 == 0 and self.verbose:
                 print(f"{epoch} : {sum(loss_list)/len(loss_list):.2f}")
+            # early stopping if validation error begins to increase
+            with torch.no_grad():
+                flat_test_strata_list = [index for indices in test_strata_list for index in indices]
+                X_test = self.X[flat_test_strata_list]
+                y_test = self.y[flat_test_strata_list]
+                test_strata_batch_len = [len(index) for index in test_strata_list]
+                y_test_pred = self.forward(X_test, test_strata_batch_len)#.to(self.device)
+                validation_loss = self.neg_log_likelihood(y_test_pred, y_test)
+            if early_stopper.early_stop(validation_loss):             
+                print(f"Early stop epoch: {epoch}\nValidation loss: {validation_loss:.2f}\nTrain loss: {sum(loss_list)/len(loss_list):.2f}")
+                break
 
 
     def predict(self, X, strata=None, strata_list=None):
@@ -154,4 +191,5 @@ class ConditionalLogisticRegression(torch.nn.Module):
     def set_dimensions(self, input_size):
         output_size = 1
         self.linear = torch.nn.Linear(input_size, output_size, bias=True, device=self.device)
+
 
