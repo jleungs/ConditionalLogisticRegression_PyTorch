@@ -6,7 +6,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
     """
     Conditional / Fixed-Effects Logistic Regression model implemented with PyTorch.
     """
-    def __init__(self, X, y, strata, learning_rate=0.0001, max_iter=1000, groups_batch_size=5):
+    def __init__(self, X, y, strata, learning_rate=0.0001, max_iter=1000, groups_batch_size=6, regularization=None, regularization_constant=0.5):
         """ Initializing all neccessary variables """
         super(ConditionalLogisticRegression, self).__init__()
         # try to use GPU
@@ -21,25 +21,31 @@ class ConditionalLogisticRegression(torch.nn.Module):
         strata.reset_index(drop=True, inplace=True)
 
         if strata.shape[1] != 1:
-            print(f"strata has to be one-dimensional, got {strata.shape[1]}")
-            exit()
+            raise ValueError(f"strata has to be one-dimensional, got {strata.shape[1]}")
 
         self.X = torch.tensor(X, dtype=torch.float32, device=self.device)
         self.y = torch.tensor(y, dtype=torch.float32, device=self.device).squeeze()
         self.strata_list = list(strata.groupby(strata.squeeze()).groups.values())
 
         if len(self.y.shape) > 1 and self.y.shape[1] != 1:
-            print("Only implemented for binary classification, 0 or 1")
-            exit()
+            raise ValueError("Only implemented for binary classification, 0 or 1")
 
         self.learning_rate = learning_rate
         self.max_iter = max_iter
         self.groups_batch_size = groups_batch_size
+        self.regularization_constant = regularization_constant
 
         input_size = self.X.shape[1]
         self.output_size = 1
 
         self.linear = torch.nn.Linear(input_size, self.output_size, bias=True, device=self.device)
+
+        if regularization == "l1":
+            self.regularization = lambda beta: torch.sum(torch.abs(beta)).to(self.device)
+        elif regularization == "l2":
+            self.regularization = lambda beta: torch.sum(torch.square(beta)).to(self.device)
+        else:
+            self.regularization = lambda beta: 0
 
 
     def forward(self, X, strata, train=True):
@@ -61,7 +67,9 @@ class ConditionalLogisticRegression(torch.nn.Module):
     def neg_log_likelihood(self, y_pred, y_true):
         """ The negative log-likelihood function to optimize """
         # divide by number of samples N, for mini-batch gradient descent
-        return -(torch.sum(y_true * torch.log(y_pred))) / self.groups_batch_size
+        if self.regularization:
+            weights = torch.cat([value.view(-1) for value in self.state_dict().values()])
+        return -(torch.sum(y_true * torch.log(y_pred))) / self.groups_batch_size + self.regularization_constant * self.regularization(weights)
 
 
     def fit(self):
