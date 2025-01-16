@@ -48,18 +48,14 @@ class ConditionalLogisticRegression(torch.nn.Module):
             self.regularization = lambda beta: 0
 
 
-    def forward(self, X, strata, train=True):
+    def forward(self, X, strata):
         """ Function to compute the probability, overwritten from torch.nn.Module """
         y_hat = self.linear(X).squeeze()
 
-        if train:
-            ix = 0
-            for i, s in enumerate(strata):
-                y_hat[ix:ix+s] = torch.nn.functional.softmax(y_hat[ix:ix+s], dim=0)
-                ix += s
-        else:
-            for value, index in strata:
-                y_hat[index] = torch.nn.functional.softmax(y_hat[index], dim=0)
+        ix = 0
+        for i, s in enumerate(strata):
+            y_hat[ix:ix+s] = torch.nn.functional.softmax(y_hat[ix:ix+s], dim=0)
+            ix += s
 
         return y_hat
 
@@ -119,8 +115,12 @@ class ConditionalLogisticRegression(torch.nn.Module):
 
         with torch.no_grad():
             X = torch.tensor(X, dtype=torch.float32).to(self.device)
-            strata = strata.groupby(strata.squeeze()).groups.items()
+            #strata = strata.groupby(strata.squeeze()).groups.items()
+            strata_list = list(strata.groupby(strata.squeeze()).groups.values())
+            flat_strata = [index for indices in strata_list for index in indices]
+            strata_len = [len(index) for index in strata_list]
+            X = X[flat_strata]
 
-            return self.forward(X, strata, train=False)
+            return self.forward(X, strata_len)[flat_strata]
 
 
