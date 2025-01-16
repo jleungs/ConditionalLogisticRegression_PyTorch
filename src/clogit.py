@@ -144,3 +144,9 @@ class ConditionalLogisticRegression(torch.nn.Module):
             return self.forward(X, strata_len)[original_index].float().squeeze().cpu().numpy()
 
 
+    def get_coef(self):
+        for name, param in self.named_parameters():
+            print(name, param)
+        return [param.data.tolist() for param in self.parameters() if len(param.size()) > 1][0][0]
+
+
