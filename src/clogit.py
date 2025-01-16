@@ -7,7 +7,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
     """
     Conditional / Fixed-Effects Logistic Regression model implemented with PyTorch.
     """
-    def __init__(self, X, y, strata, learning_rate=0.00001, max_iter=100, groups_batch_size=1, regularization=None, regularization_constant=0.5):
+    def __init__(self, X, y, strata, learning_rate=0.00001, max_iter=100, groups_batch_size=1, l2_constant=0.0001):
         """ Initializing all neccessary variables """
         super(ConditionalLogisticRegression, self).__init__()
         # try to use GPU
@@ -34,20 +34,12 @@ class ConditionalLogisticRegression(torch.nn.Module):
         self.learning_rate = learning_rate
         self.max_iter = max_iter
         self.groups_batch_size = groups_batch_size
-        self.regularization_constant = regularization_constant
+        self.l2_constant = l2_constant
 
         input_size = self.X.shape[1]
         self.output_size = 1
 
         self.linear = torch.nn.Linear(input_size, self.output_size, bias=True, device=self.device)
-
-        if regularization == "l1":
-            self.regularization = lambda beta: torch.sum(torch.abs(beta)).to(self.device)
-        elif regularization == "l2":
-            self.regularization = lambda beta: torch.sum(torch.square(beta)).to(self.device)
-        else:
-            self.regularization = lambda beta: 0
-
 
     def forward(self, X, strata):
         """ Function to compute the probability, overwritten from torch.nn.Module """
@@ -64,14 +56,12 @@ class ConditionalLogisticRegression(torch.nn.Module):
     def neg_log_likelihood(self, y_pred, y_true):
         """ The negative log-likelihood function to optimize """
         # divide by number of samples N, for mini-batch gradient descent
-        if self.regularization:
-            weights = torch.cat([value.view(-1) for value in self.state_dict().values()])
-        return -(torch.sum(y_true * torch.log(y_pred))) / self.groups_batch_size + self.regularization_constant * self.regularization(weights)
+        return -(torch.sum(y_true * torch.log(y_pred))) / self.groups_batch_size
 
 
     def fit(self):
         """ Train the model using the provided data """
-        sgd = torch.optim.SGD(self.parameters(), lr=self.learning_rate)
+        sgd = torch.optim.SGD(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_constant)
         loss_list = []
 
         for epoch in range(self.max_iter+1):
@@ -98,8 +88,8 @@ class ConditionalLogisticRegression(torch.nn.Module):
                 loss.backward()
                 sgd.step()
 
+            loss_list.append(loss.item())
             if epoch % 10 == 0:
-                loss_list.append(loss.item())
                 print(f"{epoch} : {sum(loss_list)/len(loss_list):.2f}")
 
 
