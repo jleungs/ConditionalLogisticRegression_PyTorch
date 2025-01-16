@@ -2,11 +2,12 @@ import torch
 import random
 import pandas as pd
 
+
 class ConditionalLogisticRegression(torch.nn.Module):
     """
     Conditional / Fixed-Effects Logistic Regression model implemented with PyTorch.
     """
-    def __init__(self, X, y, strata, learning_rate=0.0001, max_iter=1000, groups_batch_size=6, regularization=None, regularization_constant=0.5):
+    def __init__(self, X, y, strata, learning_rate=0.00001, max_iter=100, groups_batch_size=1, regularization=None, regularization_constant=0.5):
         """ Initializing all neccessary variables """
         super(ConditionalLogisticRegression, self).__init__()
         # try to use GPU
