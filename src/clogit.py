@@ -71,6 +71,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
     def fit(self):
         """ Train the model using the provided data """
         sgd = torch.optim.SGD(self.parameters(), lr=self.learning_rate)
+        loss_list = []
 
         for epoch in range(self.max_iter+1):
             # shuffle data based on groups
@@ -96,14 +97,15 @@ class ConditionalLogisticRegression(torch.nn.Module):
                 loss.backward()
                 sgd.step()
 
-            #if epoch % 100 == 0:
-            #    print(f"{epoch} : {loss:.2f}")
+            if epoch % 10 == 0:
+                loss_list.append(loss.item())
+                print(f"{epoch} : {sum(loss_list)/len(loss_list):.2f}")
 
 
     def predict(self, X, strata):
         """ Make predictions after fit and return binary """
         with torch.no_grad():
-            return (self.predict_prob(X, strata) > 0.5).float().squeeze().cpu().numpy()
+            return (self.predict_prob(X, strata) > 0.5).astype(int)
 
 
     def predict_prob(self, X, strata):
@@ -112,6 +114,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
             X = X.values
         if not isinstance(strata, pd.DataFrame):
             strata = pd.DataFrame(strata)
+        strata.reset_index(drop=True, inplace=True)
 
         with torch.no_grad():
             X = torch.tensor(X, dtype=torch.float32).to(self.device)
@@ -121,6 +124,6 @@ class ConditionalLogisticRegression(torch.nn.Module):
             strata_len = [len(index) for index in strata_list]
             X = X[flat_strata]
 
-            return self.forward(X, strata_len)[flat_strata]
+            return self.forward(X, strata_len)[flat_strata].float().squeeze().cpu().numpy()
 
 
