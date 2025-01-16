@@ -8,39 +8,18 @@ class ConditionalLogisticRegression(torch.nn.Module):
     """
     Conditional / Fixed-Effects Logistic Regression model implemented with PyTorch.
     """
-    def __init__(self, X, y, strata, learning_rate=0.00001, max_iter=100, groups_batch_size=1, l2_constant=0.0001):
+    def __init__(self, lr=0.00001, epochs=100, groups_batch_size=1, l2_constant=0.0001, verbose=True):
         """ Initializing all neccessary variables """
         super(ConditionalLogisticRegression, self).__init__()
         # try to use GPU
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        if isinstance(X, pd.DataFrame):
-            X = X.values
-        if isinstance(y, pd.DataFrame):
-            y = y.values
-        if not isinstance(strata, pd.DataFrame):
-            strata = pd.DataFrame(strata)
-        strata.reset_index(drop=True, inplace=True)
-
-        if strata.shape[1] != 1:
-            raise ValueError(f"strata has to be one-dimensional, got {strata.shape[1]}")
-
-        self.X = torch.tensor(X, dtype=torch.float32, device=self.device)
-        self.y = torch.tensor(y, dtype=torch.float32, device=self.device).squeeze()
-        self.strata_list = list(strata.groupby(strata.squeeze()).groups.values())
-
-        if len(self.y.shape) > 1 and self.y.shape[1] != 1:
-            raise ValueError("Only implemented for binary classification, 0 or 1")
-
-        self.learning_rate = learning_rate
-        self.max_iter = max_iter
+        self.lr = lr
+        self.max_iter = int(max_iter)
         self.groups_batch_size = groups_batch_size
         self.l2_constant = l2_constant
+        self.verbose = verbose
 
-        input_size = self.X.shape[1]
-        self.output_size = 1
-
-        self.linear = torch.nn.Linear(input_size, self.output_size, bias=True, device=self.device)
 
     def forward(self, X, strata):
         """ Function to compute the probability, overwritten from torch.nn.Module """
@@ -60,11 +39,34 @@ class ConditionalLogisticRegression(torch.nn.Module):
         return -(torch.sum(y_true * torch.log(y_pred))) / self.groups_batch_size
 
 
-    def fit(self):
+    def fit(self, X, y, strata):
         """ Train the model using the provided data """
-        sgd = torch.optim.SGD(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_constant)
-        loss_list = []
+        # get X,y,strata in right format
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+        if isinstance(y, pd.DataFrame):
+            y = y.values
+        if not isinstance(strata, pd.DataFrame):
+            strata = pd.DataFrame(strata)
+        strata.reset_index(drop=True, inplace=True)
 
+        self.X = torch.tensor(X, dtype=torch.float32, device=self.device)
+        self.y = torch.tensor(y, dtype=torch.float32, device=self.device).squeeze()
+        self.strata_list = list(strata.groupby(strata.squeeze()).groups.values())
+        # check if strata is in correct shape
+        if strata.shape[1] != 1:
+            raise ValueError(f"strata has to be one-dimensional, got {strata.shape[1]}")
+        # check if y is in correct shape
+        if len(self.y.shape) > 1 and self.y.shape[1] != 1:
+            raise ValueError("Only implemented for binary classification, 0 or 1")
+        # set linear in loss function to correct shape
+        input_size = self.X.shape[1]
+        self.output_size = 1
+        self.linear = torch.nn.Linear(input_size, self.output_size, bias=True, device=self.device)
+        # setup the optimizer 
+        sgd = torch.optim.SGD(self.parameters(), lr=self.lr, weight_decay=self.l2_constant)
+        loss_list = []
+        # mini-batch gradient descent loop
         for epoch in range(self.max_iter+1):
             # shuffle data based on groups
             random.shuffle(self.strata_list)
@@ -88,9 +90,9 @@ class ConditionalLogisticRegression(torch.nn.Module):
                 sgd.zero_grad()
                 loss.backward()
                 sgd.step()
-
+            # for logging, save loss for all epochs
             loss_list.append(loss.item())
-            if epoch % 10 == 0:
+            if epoch % 10 == 0 and self.verbose:
                 print(f"{epoch} : {sum(loss_list)/len(loss_list):.2f}")
 
 
