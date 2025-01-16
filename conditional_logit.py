@@ -49,8 +49,8 @@ class ConditionalLogisticRegression(torch.nn.Module):
                 y_hat_sum[ix:ix+sl] = torch.sum(y_hat[ix:ix+sl])
                 ix += sl
 
-            self.y_hat = y_hat
-            self.y_hat_sum = y_hat_sum
+            #self.y_hat = y_hat
+            #self.y_hat_sum = y_hat_sum
         else:
             for value, index in strata:
                 y_hat_sum[index] = torch.sum(y_hat[index])
@@ -58,9 +58,10 @@ class ConditionalLogisticRegression(torch.nn.Module):
         return y_hat / y_hat_sum
 
 
-    def neg_log_likelihood(self, y):
+    def neg_log_likelihood(self, y_pred, y_true):
         """ The negative log-likelihood function to optimize """
-        return -torch.sum( y*(torch.log(self.y_hat) - torch.log(self.y_hat_sum)) )
+        #return -torch.sum( y*(torch.log(self.y_hat) - torch.log(self.y_hat_sum)) )
+        return -torch.sum(y_true * torch.log(y_pred))
 
 
     def fit(self, groups_batch_size=5):
@@ -72,6 +73,8 @@ class ConditionalLogisticRegression(torch.nn.Module):
             random.shuffle(self.strata_list)
             # train on mini-batch
             for batch in range(0, len(self.strata_list), groups_batch_size):
+                # sets gradients to zero
+                sgd.zero_grad()
                 # select based on batch
                 strata_batch = self.strata_list[batch:batch+groups_batch_size]
                 # need to flat the list of lists to be able to get the indices
@@ -86,9 +89,8 @@ class ConditionalLogisticRegression(torch.nn.Module):
                 # get probabilities
                 y_pred = self.forward(X_batch, strata_batch_len)
                 # negative log likelihood of predicted
-                loss = self.neg_log_likelihood(y_batch)
+                loss = self.neg_log_likelihood(y_pred, y_batch)
                 # compute gradients and optimize
-                sgd.zero_grad()
                 loss.backward()
                 sgd.step()
 
@@ -115,19 +117,4 @@ class ConditionalLogisticRegression(torch.nn.Module):
 
             return self.forward(X, strata, train=False)
 
-
-import numpy as np
-
-X_train = pd.read_csv("data/X_train.csv")
-X_test = pd.read_csv("data/X_test.csv")
-y_train = pd.read_csv("data/y_train.csv")
-y_test = pd.read_csv("data/y_test.csv").squeeze()
-strata = pd.read_csv("data/strata.csv", index_col=0)
-
-model = ConditionalLogisticRegression(X_train, y_train, strata[:X_train.shape[0]])
-model.fit()
-
-y_pred = model.predict(X_test, strata[X_train.shape[0]:].reset_index(drop=True))
-accuracy = np.mean(y_pred == y_test)
-print(f'PyTorch Accuracy: {accuracy:.2f}')
 
