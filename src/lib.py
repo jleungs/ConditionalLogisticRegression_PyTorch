@@ -1,6 +1,7 @@
 import threading
 import itertools
 import numpy as np
+import pandas as pd
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.metrics import recall_score
 
@@ -19,6 +20,13 @@ class GridSearchKFoldCV():
 
 
     def fit(self, X, y, strata):
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+        if isinstance(y, pd.DataFrame):
+            y = y.values
+        if not isinstance(strata, pd.DataFrame):
+            strata = pd.DataFrame(strata)
+
         self.X = X
         self.y = y
         self.strata = strata
@@ -51,7 +59,7 @@ class GridSearchKFoldCV():
             for i in range(self.k):
                 train_idx = self.train_idx_list[i]
                 test_idx = self.test_idx_list[i]
-                model.fit(self.X[train_idx], self.y[train_idx], self.strata[train_idx])
+                model.fit(self.X[train_idx], self.y[train_idx], self.strata.iloc[train_idx])
                 score = self.evaluate_model(model, test_idx)
                 fold_score.append(score)
             with threading.Lock():
@@ -60,7 +68,7 @@ class GridSearchKFoldCV():
 
     def evaluate_model(self, model, idx):
         # sensitivity/recall for true positive correct
-        y_pred = model.predict(self.X[idx], self.strata[idx])
+        y_pred = model.predict(self.X[idx], self.strata.iloc[idx])
         return recall_score(self.y[idx], y_pred)
 
 

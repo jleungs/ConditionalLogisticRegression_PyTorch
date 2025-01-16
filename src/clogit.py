@@ -15,8 +15,8 @@ class ConditionalLogisticRegression(torch.nn.Module):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.lr = lr
-        self.max_iter = int(max_iter)
-        self.groups_batch_size = groups_batch_size
+        self.epochs = int(epochs)
+        self.groups_batch_size = int(groups_batch_size)
         self.l2_constant = l2_constant
         self.verbose = verbose
 
@@ -67,7 +67,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
         sgd = torch.optim.SGD(self.parameters(), lr=self.lr, weight_decay=self.l2_constant)
         loss_list = []
         # mini-batch gradient descent loop
-        for epoch in range(self.max_iter+1):
+        for epoch in range(self.epochs+1):
             # shuffle data based on groups
             random.shuffle(self.strata_list)
             # train on mini-batch
