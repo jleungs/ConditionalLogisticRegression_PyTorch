@@ -145,8 +145,6 @@ class ConditionalLogisticRegression(torch.nn.Module):
 
 
     def get_coef(self):
-        for name, param in self.named_parameters():
-            print(name, param)
         return [param.data.tolist() for param in self.parameters() if len(param.size()) > 1][0][0]
 
 
