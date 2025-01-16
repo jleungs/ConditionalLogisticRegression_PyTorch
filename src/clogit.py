@@ -61,8 +61,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
             raise ValueError("Only implemented for binary classification, 0 or 1")
         # set linear in loss function to correct shape
         input_size = self.X.shape[1]
-        self.output_size = 1
-        self.linear = torch.nn.Linear(input_size, self.output_size, bias=True, device=self.device)
+        self.set_dimensions(input_size)
         # setup the optimizer 
         sgd = torch.optim.SGD(self.parameters(), lr=self.lr, weight_decay=self.l2_constant)
         loss_list = []
@@ -146,4 +145,9 @@ class ConditionalLogisticRegression(torch.nn.Module):
     def score(self):
         y_pred = self.predict(self.X, strata_list=self.strata_list)
         return np.mean(y_pred == self.y.float().squeeze().cpu().numpy())
+
+    
+    def set_dimensions(self, input_size):
+        output_size = 1
+        self.linear = torch.nn.Linear(input_size, output_size, bias=True, device=self.device)
 
