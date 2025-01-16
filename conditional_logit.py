@@ -6,7 +6,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
     """
     Conditional / Fixed-Effects Logistic Regression model implemented with PyTorch.
     """
-    def __init__(self, X, y, strata, learning_rate=0.0001, max_iter=1000):
+    def __init__(self, X, y, strata, learning_rate=0.0001, max_iter=1000, groups_batch_size=5):
         """ Initializing all neccessary variables """
         super(ConditionalLogisticRegression, self).__init__()
 
@@ -16,6 +16,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
             y = y.values
         if not isinstance(strata, pd.DataFrame):
             strata = pd.DataFrame(strata)
+        strata.reset_index(drop=True, inplace=True)
 
         if strata.shape[1] != 1:
             print(f"strata has to be one-dimensional, got {strata.shape[1]}")
@@ -31,6 +32,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
 
         self.learning_rate = learning_rate
         self.max_iter = max_iter
+        self.groups_batch_size = groups_batch_size
 
         input_size = self.X.shape[1]
         self.output_size = 1
@@ -60,11 +62,10 @@ class ConditionalLogisticRegression(torch.nn.Module):
 
     def neg_log_likelihood(self, y_pred, y_true):
         """ The negative log-likelihood function to optimize """
-        #return -torch.sum( y*(torch.log(self.y_hat) - torch.log(self.y_hat_sum)) )
-        return -torch.sum(y_true * torch.log(y_pred))
+        return -torch.sum( y*(torch.log(self.y_hat) - torch.log(self.y_hat_sum)) )
 
 
-    def fit(self, groups_batch_size=5):
+    def fit(self):
         """ Train the model using the provided data """
         sgd = torch.optim.SGD(self.parameters(), lr=self.learning_rate)
 
@@ -72,11 +73,11 @@ class ConditionalLogisticRegression(torch.nn.Module):
             # shuffle data based on groups
             random.shuffle(self.strata_list)
             # train on mini-batch
-            for batch in range(0, len(self.strata_list), groups_batch_size):
+            for batch in range(0, len(self.strata_list), self.groups_batch_size):
                 # sets gradients to zero
                 sgd.zero_grad()
                 # select based on batch
-                strata_batch = self.strata_list[batch:batch+groups_batch_size]
+                strata_batch = self.strata_list[batch:batch+self.groups_batch_size]
                 # need to flat the list of lists to be able to get the indices
                 flat_strata_batch = [index for indices in strata_batch for index in indices]
                 # get the length of each group/strata to sum in forward()
