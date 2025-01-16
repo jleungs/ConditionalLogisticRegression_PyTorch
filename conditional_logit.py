@@ -44,7 +44,7 @@ class ConditionalLogisticRegression(torch.nn.Module):
 
     def forward(self, X, strata, train=True):
         """ Function to compute the probability, overwritten from torch.nn.Module """
-        y_hat = self.linear(X)
+        y_hat = self.linear(X).squeeze()
 
         if train:
             ix = 0
@@ -83,7 +83,6 @@ class ConditionalLogisticRegression(torch.nn.Module):
                 X_batch = self.X[flat_strata_batch]
                 y_batch = self.y[flat_strata_batch]
 
-                #strata_batch = strata_shuffled[batch:batch+batch_size]
                 # get probabilities
                 y_pred = self.forward(X_batch, strata_batch_len).to(self.device)
                 # negative log likelihood of predicted
